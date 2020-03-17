@@ -26,7 +26,7 @@ public:
 };
 
 ImageProcessor::ImageProcessor(const Config & config) :
-        _config(config), _debugWindow(false), _debugSkew(false), _debugDigits(false), _debugEdges(false) {
+        _config(config), _debugWindow(true), _debugSkew(true), _debugDigits(true), _debugEdges(true) {
 }
 
 /**
@@ -185,6 +185,7 @@ float ImageProcessor::detectSkew() {
 cv::Mat ImageProcessor::cannyEdges() {
     cv::Mat edges;
     // detect edges
+    cv::imshow("Grey", _imgGray);
     cv::Canny(_imgGray, edges, _config.getCannyThreshold1(), _config.getCannyThreshold2());
     return edges;
 }
@@ -200,10 +201,19 @@ void ImageProcessor::findAlignedBoxes(std::vector<cv::Rect>::const_iterator begi
     result.push_back(start);
 
     for (; it != end; ++it) {
-        if (abs(start.y - it->y) < _config.getDigitYAlignment() && abs(start.height - it->height) < 5) {
+        if (abs(start.y - it->y) < _config.getDigitYAlignment() && abs(start.height - it->height) < 10) {
             result.push_back(*it);
         }
     }
+}
+
+bool FindBound(std::vector<cv::Rect>& boundingBoxes, cv::Rect bound) {
+    for (size_t i = 0; i < boundingBoxes.size(); i++) {
+	cv::Rect rect1 = boundingBoxes[i];
+	if ((rect1 & bound).area() > 0) return true;
+    }
+    return false;
+    //return std::find(boundingBoxes.begin(), boundingBoxes.end(), bound) != boundingBoxes.end();
 }
 
 /**
@@ -212,12 +222,16 @@ void ImageProcessor::findAlignedBoxes(std::vector<cv::Rect>::const_iterator begi
 void ImageProcessor::filterContours(std::vector<std::vector<cv::Point> >& contours,
         std::vector<cv::Rect>& boundingBoxes, std::vector<std::vector<cv::Point> >& filteredContours) {
     // filter contours by bounding rect size
+
+
     for (size_t i = 0; i < contours.size(); i++) {
         cv::Rect bounds = cv::boundingRect(contours[i]);
         if (bounds.height > _config.getDigitMinHeight() && bounds.height < _config.getDigitMaxHeight()
-                && bounds.width > 5 && bounds.width < bounds.height) {
-            boundingBoxes.push_back(bounds);
-            filteredContours.push_back(contours[i]);
+                && bounds.width > 10 && bounds.width < bounds.height) {
+	    if (!FindBound(boundingBoxes, bounds)) {
+        	boundingBoxes.push_back(bounds);
+        	filteredContours.push_back(contours[i]);
+	    }
         }
     }
 }
@@ -241,15 +255,20 @@ void ImageProcessor::findCounterDigits() {
     std::vector<cv::Rect> boundingBoxes;
 
 #if CV_MAJOR_VERSION == 2
-    cv::findContours(edges, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+    cv::findContours(edges, contours, CV_RETR_CCOMP, CV_CHAIN_APPROX_NONE);
 #elif CV_MAJOR_VERSION == 3 | 4
-    cv::findContours(edges, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
+    cv::findContours(edges, contours, cv::RETR_CCOMP, cv::CHAIN_APPROX_NONE);
 #endif
 
     // filter contours by bounding rect size
+
+    rlog << log4cpp::Priority::INFO << "number of founded contours: " << contours.size();
+    rlog << log4cpp::Priority::INFO << "number of boundingBoxex: " << boundingBoxes.size();
+
     filterContours(contours, boundingBoxes, filteredContours);
 
     rlog << log4cpp::Priority::INFO << "number of filtered contours: " << filteredContours.size();
+    rlog << log4cpp::Priority::INFO << "number of boundingBoxex: " << boundingBoxes.size();
 
     // find bounding boxes that are aligned at y position
     std::vector<cv::Rect> alignedBoundingBoxes, tmpRes;
@@ -277,7 +296,12 @@ void ImageProcessor::findCounterDigits() {
         cv::Rect roi = alignedBoundingBoxes[i];
         _digits.push_back(img_ret(roi));
         if (_debugDigits) {
-            cv::rectangle(_img, roi, cv::Scalar(0, 255, 0), 2);
+            cv::putText(_img, std::to_string(i), cv::Point(roi.x+roi.width/2, roi.y+roi.height/2), CV_FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, i * 30));
+            cv::rectangle(_img, roi, cv::Scalar(0, 255, i * 30), 2);
         }
+    }
+
+    if (alignedBoundingBoxes.size() > 8) {
+	cv::waitKey(0);
     }
 }

@@ -47,7 +47,7 @@ static void testOcr(ImageInput* pImageInput) {
     proc.debugWindow();
     proc.debugDigits();
 
-    Plausi plausi;
+    Plausi plausi(50,3);
 
     KNearestOcr ocr(config);
     if (! ocr.loadTrainingData()) {
@@ -56,24 +56,41 @@ static void testOcr(ImageInput* pImageInput) {
     }
     std::cout << "OCR training data loaded.\n";
     std::cout << "<q> to quit.\n";
-
-    while (pImageInput->nextImage()) {
+    std::string path;
+    int key = 0;
+    while (pImageInput->nextImage(path)) {
         proc.setInput(pImageInput->getImage());
         proc.process();
 
         std::string result = ocr.recognize(proc.getOutput());
         std::cout << result;
+	if (result.find("?") != std::string::npos) {
+	    std::cout << "Learn" << path << "  " << std::endl;
+	    for(std::string::size_type i = 0; i < result.size(); ++i) {
+		if (result[i] == '?') {
+		    key = ocr.learn(proc.getOutput()[i]);
+                }
+	    }
+    	    if (key == 'q' || key == 's') {
+        	std::cout << "Quit\n";
+        	break;
+    	    }
+	}
         if (plausi.check(result, pImageInput->getTime())) {
-            std::cout << "  " << std::fixed << std::setprecision(1) << plausi.getCheckedValue() << std::endl;
+            std::cout << "  " << std::fixed << std::setprecision(3) << plausi.getCheckedValue() << std::endl;
         } else {
-            std::cout << "  -------" << std::endl;
+            std::cout << "  -------!" << std::endl;
         }
-        int key = cv::waitKey(delay) & 255;
+        key = cv::waitKey(delay) & 255;
 
         if (key == 'q') {
             std::cout << "Quit\n";
             break;
         }
+    }
+    if (key != 'q' && ocr.hasTrainingData()) {
+        std::cout << "Saving training data\n";
+        ocr.saveTrainingData();
     }
 }
 
@@ -91,7 +108,8 @@ static void learnOcr(ImageInput* pImageInput) {
     std::cout << "<0>..<9> to answer digit, <space> to ignore digit, <s> to save and quit, <q> to quit without saving.\n";
 
     int key = 0;
-    while (pImageInput->nextImage()) {
+    std::string path;
+    while (pImageInput->nextImage(path)) {
         proc.setInput(pImageInput->getImage());
         proc.process();
 
@@ -126,7 +144,8 @@ static void adjustCamera(ImageInput* pImageInput) {
 
     bool processImage = true;
     int key = 0;
-    while (pImageInput->nextImage()) {
+    std::string path;
+    while (pImageInput->nextImage(path)) {
         proc.setInput(pImageInput->getImage());
         if (processImage) {
             proc.process();
@@ -156,8 +175,8 @@ static void capture(ImageInput* pImageInput) {
 
     std::cout << "Capturing images into directory.\n";
     std::cout << "<Ctrl-C> to quit.\n";
-
-    while (pImageInput->nextImage()) {
+    std::string path;
+    while (pImageInput->nextImage(path)) {
         usleep(delay*1000L);
     }
 }
@@ -182,8 +201,8 @@ static void writeData(ImageInput* pImageInput) {
     }
     std::cout << "OCR training data loaded.\n";
     std::cout << "<Ctrl-C> to quit.\n";
-
-    while (pImageInput->nextImage()) {
+    std::string path;
+    while (pImageInput->nextImage(path)) {
         proc.setInput(pImageInput->getImage());
         proc.process();
 
@@ -230,6 +249,7 @@ static void configureLogging(const std::string & priority = "INFO", bool toConso
     root.setPriority(log4cpp::Priority::getPriorityValue(priority));
     root.addAppender(fileAppender);
     if (toConsole) {
+	std::cout << "CONSOLE\n";
         log4cpp::Appender *consoleAppender = new log4cpp::OstreamAppender("console", &std::cout);
         consoleAppender->setLayout(new log4cpp::SimpleLayout());
         root.addAppender(consoleAppender);
@@ -291,7 +311,7 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    configureLogging(logLevel, cmd == 'a');
+    configureLogging(logLevel, /*cmd == 'a' || cmd == 't'*/ true);
 
     switch (cmd) {
         case 'o':

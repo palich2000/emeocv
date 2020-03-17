@@ -8,6 +8,7 @@
 #include <utility>
 #include <ctime>
 #include <cstdlib>
+#include <math.h>
 
 #include <log4cpp/Category.hh>
 #include <log4cpp/Priority.hh>
@@ -23,10 +24,10 @@ bool Plausi::check(const std::string& value, time_t time) {
     if (rlog.isInfoEnabled()) {
         rlog.info("Plausi check: %s of %s", value.c_str(), ctime(&time));
     }
-
-    if (value.length() != 7) {
-        // exactly 7 digits
-        rlog.info("Plausi rejected: exactly 7 digits");
+    //00835.995
+    int vLen = value.length();
+    if (vLen < 5 || vLen > 8 ) {
+        rlog.info("Plausi rejected: exactly %d digits", vLen );
         return false;
     }
     if (value.find_first_of('?') != std::string::npos) {
@@ -34,8 +35,11 @@ bool Plausi::check(const std::string& value, time_t time) {
         rlog.info("Plausi rejected: no '?' char");
         return false;
     }
-
-    double dval = atof(value.c_str()) / 10.;
+    //5  = 1
+    //6  = 10
+    //7  = 100
+    //8  = 1000
+    double dval = atof(value.c_str()) / pow(10.,vLen - 5.  );
     _queue.push_back(std::make_pair(time, dval));
 
     if (_queue.size() < _window) {
@@ -55,7 +59,7 @@ bool Plausi::check(const std::string& value, time_t time) {
     while (it != _queue.end()) {
         if (it->second < dval) {
             // value must be >= previous value
-            rlog.info("Plausi rejected: value must be >= previous value");
+            rlog.info("Plausi rejected: value %.3f must be >= previous value %.3f", it->second , dval);
             return false;
         }
         double power = (it->second - dval) / (it->first - time) * 3600.;
@@ -76,7 +80,7 @@ bool Plausi::check(const std::string& value, time_t time) {
     time_t candTime = _queue.at(_window/2).first;
     double candValue = _queue.at(_window/2).second;
     if (candValue < _value) {
-        rlog.info("Plausi rejected: value must be >= previous checked value");
+        rlog.info("Plausi rejected: value %.3f must be >= previous checked value %.3f", candValue, _value);
         return false;
     }
     double power = (candValue - _value) / (candTime - _time) * 3600.;
@@ -89,7 +93,7 @@ bool Plausi::check(const std::string& value, time_t time) {
     _time = candTime;
     _value = candValue;
     if (rlog.isInfoEnabled()) {
-        rlog.info("Plausi accepted: %.1f of %s", _value, ctime(&_time));
+        rlog.info("Plausi accepted: %.3f of %s", _value, ctime(&_time));
     }
     return true;
 }
@@ -108,7 +112,7 @@ std::string Plausi::queueAsString() {
     str += "[";
     std::deque<std::pair<time_t, double> >::const_iterator it = _queue.begin();
     for (; it != _queue.end(); ++it) {
-        sprintf(buf, "%.1f", it->second);
+        sprintf(buf, "%.3f", it->second);
         str += buf;
         str += ", ";
     }

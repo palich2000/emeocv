@@ -49,12 +49,13 @@ DirectoryInput::DirectoryInput(const Directory& directory) :
     _itFilename = _filenameList.begin();
 }
 
-bool DirectoryInput::nextImage() {
+bool DirectoryInput::nextImage(std::string& path) {
+    log4cpp::Category& rlog = log4cpp::Category::getRoot();
     if (_itFilename == _filenameList.end()) {
         return false;
     }
-    std::string path = _directory.fullpath(*_itFilename);
-
+    path = _directory.fullpath(*_itFilename);
+    
     _img = cv::imread(path.c_str());
 
     // read time from file name
@@ -68,7 +69,7 @@ bool DirectoryInput::nextImage() {
     date.tm_sec = atoi(_itFilename->substr(13, 2).c_str());
     _time = mktime(&date);
 
-    log4cpp::Category::getRoot() << log4cpp::Priority::INFO << "Processing " << *_itFilename << " of " << ctime(&_time);
+    rlog << log4cpp::Priority::INFO << log4cpp::Priority::INFO << "Processing " << *_itFilename << " of " << ctime(&_time);
 
     // save copy of image if requested
     if (!_outDir.empty()) {
@@ -83,7 +84,7 @@ CameraInput::CameraInput(int device) {
     _capture.open(device);
 }
 
-bool CameraInput::nextImage() {
+bool CameraInput::nextImage(std::string& path) {
     time(&_time);
     // read image from camera
     bool success = _capture.read(_img);
