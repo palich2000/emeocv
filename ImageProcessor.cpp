@@ -26,7 +26,7 @@ public:
 };
 
 ImageProcessor::ImageProcessor(const Config & config) :
-        _config(config), _debugWindow(true), _debugSkew(true), _debugDigits(true), _debugEdges(true) {
+        _config(config), _debugWindow(false), _debugSkew(false), _debugDigits(false), _debugEdges(false) {
 }
 
 /**
@@ -185,7 +185,7 @@ float ImageProcessor::detectSkew() {
 cv::Mat ImageProcessor::cannyEdges() {
     cv::Mat edges;
     // detect edges
-    cv::imshow("Grey", _imgGray);
+    //cv::imshow("Grey", _imgGray);
     cv::Canny(_imgGray, edges, _config.getCannyThreshold1(), _config.getCannyThreshold2());
     return edges;
 }
