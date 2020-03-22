@@ -26,7 +26,7 @@ endif
 
 BIN := $(OUTDIR)/$(PROJECT)
 
-LDLIBS = `pkg-config opencv --libs` -lrrd -llog4cpp
+LDLIBS = `pkg-config opencv --libs` -lpthread -lrrd -llog4cpp -lmosquittopp
 
 SUFFIXES= .cpp .o
 .SUFFIXES: $(SUFFIXES) .

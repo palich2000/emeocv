@@ -73,7 +73,7 @@ bool DirectoryInput::nextImage(std::string& path) {
     date.tm_sec = atoi(_itFilename->substr(13, 2).c_str());
     _time = mktime(&date);
 
-    rlog << log4cpp::Priority::INFO << log4cpp::Priority::INFO << "Processing " << *_itFilename << " of " << ctime(&_time);
+    rlog << log4cpp::Priority::INFO << "Processing " << *_itFilename << " of " << ctime(&_time);
 
     // save copy of image if requested
     if (!_outDir.empty()) {

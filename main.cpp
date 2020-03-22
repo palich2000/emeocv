@@ -12,7 +12,8 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-
+#include <mosquittopp.h>
+#include <thread>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
@@ -37,6 +38,7 @@ static int delay = 1000;
 #ifndef VERSION
 #define VERSION "0.9.7"
 #endif
+volatile bool do_exit = false;
 
 static void testOcr(ImageInput* pImageInput) {
     log4cpp::Category::getRoot().info("testOcr");
@@ -259,6 +261,93 @@ static void configureLogging(const std::string & priority = "INFO", bool toConso
         root.addAppender(consoleAppender);
     }
 }
+#define ONLINE "Online"
+#define OFFLINE "Offline"
+
+const char * mqtt_host = "192.168.0.106";
+const int mqtt_port = 8883;
+const int mqtt_keepalive = 60;
+
+class mosquittoPP : public mosqpp::mosquittopp {
+public:
+    using  mosqpp::mosquittopp::mosquittopp;
+    void publish_lwt(bool online);
+    void publish_state(void);
+    void on_connect(int rc);
+};
+
+void mosquittoPP::publish_lwt(bool online) {
+    const char * msg = online ? ONLINE : OFFLINE;
+    publish(NULL,"tele/gas/LWT",strlen(msg),msg, 0, true);
+}
+
+void mosquittoPP::publish_state(void) {
+}
+
+void mosquittoPP::on_connect(int rc) {
+    log4cpp::Category& rlog = log4cpp::Category::getRoot();
+    std::cout << "AAAA " << rc << std::endl;
+    switch (rc) {
+    case 0:
+        subscribe(NULL, "stat/+/POWER", 0);
+        publish_lwt(true);
+        publish_state();
+        break;
+    case 1:
+        rlog << log4cpp::Priority::ERROR << "Connection refused (unacceptable protocol version).";
+        break;
+    case 2:
+        rlog << log4cpp::Priority::ERROR << "Connection refused (identifier rejected).";
+        break;
+    case 3:
+        rlog << log4cpp::Priority::ERROR << "Connection refused (broker unavailable).";
+        break;
+    default:
+        rlog << log4cpp::Priority::ERROR << "Unknown connection error. (%s)" << mosqpp::strerror(rc);
+        break;
+    }
+    if (rc != 0) {
+        sleep(10);
+    }
+}
+
+static
+void mosq_thread_loop(mosquittoPP * mosq) {
+    log4cpp::Category& rlog = log4cpp::Category::getRoot();
+
+    while (!do_exit) {
+        int res = mosq->loop(1000, 1);
+        switch (res) {
+        case MOSQ_ERR_SUCCESS:
+            break;
+        case MOSQ_ERR_NO_CONN: {
+            int res = mosq->connect(mqtt_host, mqtt_port, mqtt_keepalive);
+            if (res) {
+                rlog << log4cpp::Priority::ERROR << "Can't connect to Mosquitto server %s" << mosqpp::strerror(res);
+                sleep(30);
+            }
+            break;
+        }
+        case MOSQ_ERR_INVAL:
+        case MOSQ_ERR_NOMEM:
+        case MOSQ_ERR_CONN_LOST:
+        case MOSQ_ERR_PROTOCOL:
+        case MOSQ_ERR_ERRNO:
+            rlog << log4cpp::Priority::ERROR <<  strerror(errno) << " " << mosqpp::strerror(res);
+            mosq->disconnect();
+            rlog << log4cpp::Priority::ERROR << "disconnected";
+            sleep(10);
+            rlog << log4cpp::Priority::ERROR << "Try to reconnect";
+            int res = mosq->connect(mqtt_host, mqtt_port, mqtt_keepalive);
+            if (res) {
+                rlog << log4cpp::Priority::ERROR << "Can't connect to Mosquitto server " << mosqpp::strerror(res);
+            } else {
+                rlog << log4cpp::Priority::ERROR <<"Connected";
+            }
+            break;
+        }
+    }
+}
 
 int main(int argc, char **argv) {
     int opt;
@@ -319,7 +408,18 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    configureLogging(logLevel, /*cmd == 'a' || cmd == 't'*/ true);
+    configureLogging(logLevel, true);
+    mosqpp::lib_init();
+    mosquittoPP * mosq = new mosquittoPP("test", true);
+
+
+    mosq->username_pw_set("owntracks", "zhopa");
+    mosq->will_set("tele/gas/LWT",strlen(OFFLINE),OFFLINE, 0, true);
+    mosq->connect(mqtt_host, mqtt_port, mqtt_keepalive);
+
+
+    std::thread mosq_th(mosq_thread_loop, mosq);
+
 
     switch (cmd) {
     case 'o':
@@ -340,6 +440,12 @@ int main(int argc, char **argv) {
         break;
     }
 
+    do_exit = true;
     delete pImageInput;
+    mosq->publish_lwt(false);
+    mosq->disconnect();
+    mosq_th.join();
+    delete mosq;
+    mosqpp::lib_cleanup();
     exit(EXIT_SUCCESS);
 }
