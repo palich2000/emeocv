@@ -54,4 +54,18 @@ private:
     cv::VideoCapture _capture;
 };
 
+class InotifyInput: public ImageInput {
+public:
+    InotifyInput(const std::string path, int timeout);
+    ~InotifyInput();
+    virtual bool nextImage(std::string& path);
+
+private:
+    std::string _path;
+    int _inotifyFd;
+    int _inotifyWatch;
+    int _timeout;
+    std::list<std::string> _files;
+};
+
 #endif /* IMAGEINPUT_H_ */

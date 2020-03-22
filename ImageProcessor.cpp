@@ -26,7 +26,7 @@ public:
 };
 
 ImageProcessor::ImageProcessor(const Config & config) :
-        _config(config), _debugWindow(false), _debugSkew(false), _debugDigits(false), _debugEdges(false) {
+    _config(config), _debugWindow(false), _debugSkew(false), _debugEdges(false), _debugDigits(false)  {
 }
 
 /**
@@ -77,7 +77,7 @@ void ImageProcessor::process() {
 
     // convert to gray
 #if CV_MAJOR_VERSION == 2
-    cvtColor(_img, _imgGray, CV_BGR2GRAY); 
+    cvtColor(_img, _imgGray, CV_BGR2GRAY);
 #elif CV_MAJOR_VERSION == 3 | 4
     cvtColor(_img, _imgGray, cv::COLOR_BGR2GRAY);
 #endif
@@ -135,7 +135,7 @@ void ImageProcessor::drawLines(std::vector<cv::Vec2f>& lines) {
 void ImageProcessor::drawLines(std::vector<cv::Vec4i>& lines, int xoff, int yoff) {
     for (size_t i = 0; i < lines.size(); i++) {
         cv::line(_img, cv::Point(lines[i][0] + xoff, lines[i][1] + yoff),
-                cv::Point(lines[i][2] + xoff, lines[i][3] + yoff), cv::Scalar(255, 0, 0), 1);
+                 cv::Point(lines[i][2] + xoff, lines[i][3] + yoff), cv::Scalar(255, 0, 0), 1);
     }
 }
 
@@ -194,7 +194,7 @@ cv::Mat ImageProcessor::cannyEdges() {
  * Find bounding boxes that are aligned at y position.
  */
 void ImageProcessor::findAlignedBoxes(std::vector<cv::Rect>::const_iterator begin,
-        std::vector<cv::Rect>::const_iterator end, std::vector<cv::Rect>& result) {
+                                      std::vector<cv::Rect>::const_iterator end, std::vector<cv::Rect>& result) {
     std::vector<cv::Rect>::const_iterator it = begin;
     cv::Rect start = *it;
     ++it;
@@ -207,31 +207,48 @@ void ImageProcessor::findAlignedBoxes(std::vector<cv::Rect>::const_iterator begi
     }
 }
 
-bool FindBound(std::vector<cv::Rect>& boundingBoxes, cv::Rect bound) {
+int FindBound(std::vector<cv::Rect>& boundingBoxes, cv::Rect bound) {
     for (size_t i = 0; i < boundingBoxes.size(); i++) {
-	cv::Rect rect1 = boundingBoxes[i];
-	if ((rect1 & bound).area() > 0) return true;
+        cv::Rect rect1 = boundingBoxes[i];
+        if ((rect1 & bound).area() > 0) {
+            if (rect1.area() < bound.area()) {
+                return i; // delete old and append
+            }
+            return -2; // not append
+        }
     }
-    return false;
-    //return std::find(boundingBoxes.begin(), boundingBoxes.end(), bound) != boundingBoxes.end();
+    return -1; // append
 }
 
 /**
  * Filter contours by size of bounding rectangle.
  */
 void ImageProcessor::filterContours(std::vector<std::vector<cv::Point> >& contours,
-        std::vector<cv::Rect>& boundingBoxes, std::vector<std::vector<cv::Point> >& filteredContours) {
-    // filter contours by bounding rect size
+                                    std::vector<cv::Rect>& boundingBoxes,
+                                    std::vector<std::vector<cv::Point> >& filteredContours) {
 
+    // filter contours by bounding rect size
 
     for (size_t i = 0; i < contours.size(); i++) {
         cv::Rect bounds = cv::boundingRect(contours[i]);
         if (bounds.height > _config.getDigitMinHeight() && bounds.height < _config.getDigitMaxHeight()
                 && bounds.width > 10 && bounds.width < bounds.height) {
-	    if (!FindBound(boundingBoxes, bounds)) {
-        	boundingBoxes.push_back(bounds);
-        	filteredContours.push_back(contours[i]);
-	    }
+            int position = FindBound(boundingBoxes, bounds);
+            switch (position) {
+            case -2:
+                break;
+            case -1:
+                ;
+                boundingBoxes.push_back(bounds);
+                filteredContours.push_back(contours[i]);
+                break;
+            default:
+                boundingBoxes.erase(boundingBoxes.begin()+position);
+                filteredContours.erase(filteredContours.begin()+position);
+                boundingBoxes.push_back(bounds);
+                filteredContours.push_back(contours[i]);
+                break;
+            }
         }
     }
 }
@@ -292,7 +309,7 @@ void ImageProcessor::findCounterDigits() {
     }
 
     // cut out found rectangles from edged image
-    for (int i = 0; i < alignedBoundingBoxes.size(); ++i) {
+    for (size_t i = 0; i < alignedBoundingBoxes.size(); ++i) {
         cv::Rect roi = alignedBoundingBoxes[i];
         _digits.push_back(img_ret(roi));
         if (_debugDigits) {
@@ -302,6 +319,6 @@ void ImageProcessor::findCounterDigits() {
     }
 
     if (alignedBoundingBoxes.size() > 8) {
-	cv::waitKey(0);
+        cv::waitKey(0);
     }
 }

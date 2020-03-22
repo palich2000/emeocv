@@ -15,8 +15,8 @@
 
 #include "Plausi.h"
 
-Plausi::Plausi(double maxPower, int window) :
-        _maxPower(maxPower), _window(window), _value(-1.), _time(0) {
+Plausi::Plausi(double maxPower, size_t window) :
+    _maxPower(maxPower), _window(window), _value(-1.), _time(0) {
 }
 
 bool Plausi::check(const std::string& value, time_t time) {
@@ -59,7 +59,7 @@ bool Plausi::check(const std::string& value, time_t time) {
     while (it != _queue.end()) {
         if (it->second < dval) {
             // value must be >= previous value
-            rlog.info("Plausi rejected: value %.3f must be >= previous value %.3f", it->second , dval);
+            rlog.info("Plausi rejected: value %.3f must be >= previous value %.3f", it->second, dval);
             return false;
         }
         double power = (it->second - dval) / (it->first - time) * 3600.;
@@ -119,5 +119,3 @@ std::string Plausi::queueAsString() {
     str += "]";
     return str;
 }
-
-

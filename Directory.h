@@ -15,8 +15,9 @@ public:
 
     std::list<std::string> list();
     std::string fullpath(const std::string filename);
+    std::string path();
+    static bool hasExtension(const char* name, const char* ext);
 private:
-    bool hasExtension(const char* name, const char* ext);
 
     std::string _path;
     std::string _extension;

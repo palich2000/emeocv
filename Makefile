@@ -14,7 +14,7 @@ OBJS = $(addprefix $(OUTDIR)/,\
   )
 
 CC = g++
-CFLAGS = -Wno-write-strings -I . `pkg-config opencv --cflags`
+CFLAGS = -Wno-write-strings -Wall -I . `pkg-config opencv --cflags`
 
 # DEBUG
 ifneq ($(RELEASE),true)

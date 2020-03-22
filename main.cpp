@@ -63,19 +63,23 @@ static void testOcr(ImageInput* pImageInput) {
         proc.process();
 
         std::string result = ocr.recognize(proc.getOutput());
-        std::cout << result;
-	if (result.find("?") != std::string::npos) {
-	    std::cout << "Learn" << path << "  " << std::endl;
-	    for(std::string::size_type i = 0; i < result.size(); ++i) {
-		if (result[i] == '?') {
-		    key = ocr.learn(proc.getOutput()[i]);
+        time_t time = pImageInput->getTime();
+        char * str_time = std::ctime(&time);
+        str_time[strlen(str_time)-1]=0;
+        std::cout << str_time << "  ";
+        std::cout << std::left << std::setw(8) << result;
+        if (result.find("?") != std::string::npos) {
+            std::cout << "Learn" << path << "  " << std::endl;
+            for(std::string::size_type i = 0; i < result.size(); ++i) {
+                if (result[i] == '?') {
+                    key = ocr.learn(proc.getOutput()[i]);
                 }
-	    }
-    	    if (key == 'q' || key == 's') {
-        	std::cout << "Quit\n";
-        	break;
-    	    }
-	}
+            }
+            if (key == 'q' || key == 's') {
+                std::cout << "Quit\n";
+                break;
+            }
+        }
         if (plausi.check(result, pImageInput->getTime())) {
             std::cout << "  " << std::fixed << std::setprecision(3) << plausi.getCheckedValue() << std::endl;
         } else {
@@ -249,7 +253,7 @@ static void configureLogging(const std::string & priority = "INFO", bool toConso
     root.setPriority(log4cpp::Priority::getPriorityValue(priority));
     root.addAppender(fileAppender);
     if (toConsole) {
-	std::cout << "CONSOLE\n";
+        std::cout << "CONSOLE\n";
         log4cpp::Appender *consoleAppender = new log4cpp::OstreamAppender("console", &std::cout);
         consoleAppender->setLayout(new log4cpp::SimpleLayout());
         root.addAppender(consoleAppender);
@@ -265,39 +269,43 @@ int main(int argc, char **argv) {
     char cmd = 0;
     int cmdCount = 0;
 
-    while ((opt = getopt(argc, argv, "i:c:ltaws:o:v:h")) != -1) {
+    while ((opt = getopt(argc, argv, "i:c:ltaws:o:v:hd:")) != -1) {
         switch (opt) {
-            case 'i':
-                pImageInput = new DirectoryInput(Directory(optarg, ".png"));
-                inputCount++;
-                break;
-            case 'c':
-                pImageInput = new CameraInput(atoi(optarg));
-                inputCount++;
-                break;
-            case 'l':
-            case 't':
-            case 'a':
-            case 'w':
-                cmd = opt;
-                cmdCount++;
-                break;
-            case 'o':
-                cmd = opt;
-                cmdCount++;
-                outputDir = optarg;
-                break;
-            case 's':
-                delay = atoi(optarg);
-                break;
-            case 'v':
-                logLevel = optarg;
-                break;
-            case 'h':
-            default:
-                usage(argv[0]);
-                exit(EXIT_FAILURE);
-                break;
+        case 'd':
+            pImageInput = new InotifyInput(optarg, 100000);
+            inputCount++;
+            break;
+        case 'i':
+            pImageInput = new DirectoryInput(Directory(optarg, ".png"));
+            inputCount++;
+            break;
+        case 'c':
+            pImageInput = new CameraInput(atoi(optarg));
+            inputCount++;
+            break;
+        case 'l':
+        case 't':
+        case 'a':
+        case 'w':
+            cmd = opt;
+            cmdCount++;
+            break;
+        case 'o':
+            cmd = opt;
+            cmdCount++;
+            outputDir = optarg;
+            break;
+        case 's':
+            delay = atoi(optarg);
+            break;
+        case 'v':
+            logLevel = optarg;
+            break;
+        case 'h':
+        default:
+            usage(argv[0]);
+            exit(EXIT_FAILURE);
+            break;
         }
     }
     if (inputCount != 1) {
@@ -314,22 +322,22 @@ int main(int argc, char **argv) {
     configureLogging(logLevel, /*cmd == 'a' || cmd == 't'*/ true);
 
     switch (cmd) {
-        case 'o':
-            pImageInput->setOutputDir(outputDir);
-            capture(pImageInput);
-            break;
-        case 'l':
-            learnOcr(pImageInput);
-            break;
-        case 't':
-            testOcr(pImageInput);
-            break;
-        case 'a':
-            adjustCamera(pImageInput);
-            break;
-        case 'w':
-            writeData(pImageInput);
-            break;
+    case 'o':
+        pImageInput->setOutputDir(outputDir);
+        capture(pImageInput);
+        break;
+    case 'l':
+        learnOcr(pImageInput);
+        break;
+    case 't':
+        testOcr(pImageInput);
+        break;
+    case 'a':
+        adjustCamera(pImageInput);
+        break;
+    case 'w':
+        writeData(pImageInput);
+        break;
     }
 
     delete pImageInput;

@@ -11,9 +11,8 @@
 #include "Directory.h"
 
 Directory::Directory(const char* path, const char* extension) :
-        _path(path), _extension(extension) {
+    _path(path), _extension(extension) {
 }
-
 std::list<std::string> Directory::list() {
     std::list<std::string> files;
     DIR *dir;
@@ -45,4 +44,7 @@ bool Directory::hasExtension(const char* name, const char* ext) {
     size_t blen = strlen(name);
     size_t slen = strlen(ext);
     return (blen >= slen) && (0 == strcmp(name + blen - slen, ext));
+}
+std::string Directory::path() {
+    return _path;
 }
