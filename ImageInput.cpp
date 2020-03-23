@@ -22,7 +22,7 @@
 ImageInput::~ImageInput() {
 }
 
-cv::Mat& ImageInput::getImage() {
+cv::Mat & ImageInput::getImage() {
     return _img;
 }
 
@@ -35,6 +35,10 @@ void ImageInput::setOutputDir(const std::string & outDir) {
 }
 
 void ImageInput::saveImage() {
+    if (_outDir.length() == 0) {
+        log4cpp::Category::getRoot() << log4cpp::Priority::ERROR << "Try save image empty path";
+        return;
+    }
     struct tm date;
     localtime_r(&_time, &date);
     char filename[PATH_MAX];
@@ -45,15 +49,15 @@ void ImageInput::saveImage() {
     }
 }
 
-DirectoryInput::DirectoryInput(const Directory& directory) :
+DirectoryInput::DirectoryInput(const Directory & directory) :
     _directory(directory) {
     _filenameList = _directory.list();
     _filenameList.sort();
     _itFilename = _filenameList.begin();
 }
 
-bool DirectoryInput::nextImage(std::string& path) {
-    log4cpp::Category& rlog = log4cpp::Category::getRoot();
+bool DirectoryInput::nextImage(std::string & path) {
+    log4cpp::Category & rlog = log4cpp::Category::getRoot();
     if (_itFilename == _filenameList.end()) {
         return false;
     }
@@ -88,7 +92,7 @@ CameraInput::CameraInput(int device) {
     _capture.open(device);
 }
 
-bool CameraInput::nextImage(std::string& path) {
+bool CameraInput::nextImage(std::string & path) {
     time(&_time);
     // read image from camera
     bool success = _capture.read(_img);
@@ -108,7 +112,7 @@ InotifyInput::InotifyInput(const std::string path, int timeout):
     _path(path),
     _timeout(timeout) {
 
-    log4cpp::Category& rlog = log4cpp::Category::getRoot();
+    log4cpp::Category & rlog = log4cpp::Category::getRoot();
     _inotifyFd = inotify_init();
 
     if (_inotifyFd == -1) {
@@ -135,13 +139,13 @@ InotifyInput::~InotifyInput(void) {
 
 #define BUF_LEN (10 * (sizeof(struct inotify_event) + NAME_MAX + 1))
 
-bool InotifyInput::nextImage(std::string& path) {
+bool InotifyInput::nextImage(std::string & path) {
     char buf[BUF_LEN] __attribute__ ((aligned(8)));
     struct pollfd fds[1];
     fds[0].fd = _inotifyFd;
     fds[0].events = POLLIN;
 
-    log4cpp::Category& rlog = log4cpp::Category::getRoot();
+    log4cpp::Category & rlog = log4cpp::Category::getRoot();
 
     while (_files.empty()) {
         int poll_ret = poll(fds, 1,  _timeout);
@@ -168,7 +172,7 @@ bool InotifyInput::nextImage(std::string& path) {
 
         for (char * p = buf; p < buf + numRead; ) {
             struct inotify_event * event = (struct inotify_event *) p;
-            if (Directory::hasExtension(event->name,".png")) {
+            if (Directory::hasExtension(event->name, ".png")) {
                 /*                printf("%s %s %s %x\n", event->name,
                                        event->mask & IN_CLOSE_WRITE? "IN_CLOSE_WRITE":"",
                                        event->mask & IN_MOVED_TO? "IN_MOVED_TO":"",
@@ -187,7 +191,7 @@ bool InotifyInput::nextImage(std::string& path) {
         return false;
     }
 
-    path = _path + "/" +_files.front();
+    path = _path + "/" + _files.front();
     auto _itFilename = _files.front();
     _files.pop_front();
 

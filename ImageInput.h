@@ -19,7 +19,7 @@ class ImageInput {
 public:
     virtual ~ImageInput();
 
-    virtual bool nextImage(std::string& path) = 0;
+    virtual bool nextImage(std::string & path) = 0;
 
     virtual cv::Mat & getImage();
     virtual time_t getTime();
@@ -29,14 +29,14 @@ public:
 protected:
     cv::Mat _img;
     time_t _time;
-    std::string _outDir;
+    std::string _outDir = "";
 };
 
 class DirectoryInput: public ImageInput {
 public:
     DirectoryInput(const Directory & directory);
 
-    virtual bool nextImage(std::string& path);
+    virtual bool nextImage(std::string & path);
 
 private:
     Directory _directory;
@@ -48,7 +48,7 @@ class CameraInput: public ImageInput {
 public:
     CameraInput(int device);
 
-    virtual bool nextImage(std::string& path);
+    virtual bool nextImage(std::string & path);
 
 private:
     cv::VideoCapture _capture;
@@ -58,7 +58,7 @@ class InotifyInput: public ImageInput {
 public:
     InotifyInput(const std::string path, int timeout);
     ~InotifyInput();
-    virtual bool nextImage(std::string& path);
+    virtual bool nextImage(std::string & path);
 
 private:
     std::string _path;

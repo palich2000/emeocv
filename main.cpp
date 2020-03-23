@@ -40,7 +40,130 @@ static int delay = 1000;
 #endif
 volatile bool do_exit = false;
 
-static void testOcr(ImageInput* pImageInput) {
+template<typename ... Args>
+std::string string_format( const std::string & format, Args ... args ) {
+    size_t size = snprintf( nullptr, 0, format.c_str(), args ... ) + 1;
+    if( size <= 0 ) {
+        throw std::runtime_error( "Error during formatting." );
+    }
+    std::unique_ptr<char[]> buf( new char[ size ] );
+    snprintf( buf.get(), size, format.c_str(), args ... );
+    return std::string( buf.get(), buf.get() + size - 1 );
+}
+
+#define ONLINE "Online"
+#define OFFLINE "Offline"
+
+const char * mqtt_host = "192.168.0.106";
+const int mqtt_port = 8883;
+const int mqtt_keepalive = 60;
+#define TOPIC_LWT "tele/%s/LWT"
+#define TOPIC_SENSOR "tele/%s/SENSOR"
+class mosquittoPP : public mosqpp::mosquittopp {
+public:
+    //using  mosqpp::mosquittopp::mosquittopp;
+    mosquittoPP(const char * id = NULL, bool clean_session = true, const char * hostname = "unknown");
+    void publish_lwt(bool online);
+    void publish_state(double gas_value);
+    void on_connect(int rc);
+    std::string make_topic(const std::string & tmpl);
+private:
+    std::string _hostname = "unknown";
+};
+
+mosquittoPP::mosquittoPP(const char * id, bool clean_session, const char * hostname):
+    mosqpp::mosquittopp(id, clean_session), _hostname(hostname) {
+}
+
+std::string mosquittoPP::make_topic(const std::string & tmpl) {
+    return string_format(tmpl, _hostname.c_str());
+}
+
+void mosquittoPP::publish_lwt(bool online) {
+    const char * msg = online ? ONLINE : OFFLINE;
+    publish(NULL, make_topic(TOPIC_LWT).c_str(), strlen(msg), msg, 0, true);
+}
+
+void mosquittoPP::publish_state(double gas_value) {
+
+    std::stringstream ss;
+    char tm_buffer[32] = {};
+    time_t now = time(NULL);
+    struct tm * tm_info = localtime(&now);
+    strftime(tm_buffer, 26, "%Y-%m-%dT%H:%M:%S", tm_info);
+
+    ss << "{\"Time\":\"" << tm_buffer << "\"," << "\"GAS\":" << std::fixed << std::setprecision(3) << gas_value << "}";
+    std::string msg = ss.str();
+    std::cout << ss.str() << std::endl;
+    publish(NULL, make_topic(TOPIC_SENSOR).c_str(), msg.length(), msg.c_str(), 0, false);
+}
+
+void mosquittoPP::on_connect(int rc) {
+    log4cpp::Category & rlog = log4cpp::Category::getRoot();
+    switch (rc) {
+    case 0:
+        rlog << log4cpp::Priority::INFO << "Connected to mqtt server.";
+        subscribe(NULL, "stat/+/POWER", 0);
+        publish_lwt(true);
+        //publish_state();
+        break;
+    case 1:
+        rlog << log4cpp::Priority::ERROR << "Connection refused (unacceptable protocol version).";
+        break;
+    case 2:
+        rlog << log4cpp::Priority::ERROR << "Connection refused (identifier rejected).";
+        break;
+    case 3:
+        rlog << log4cpp::Priority::ERROR << "Connection refused (broker unavailable).";
+        break;
+    default:
+        rlog << log4cpp::Priority::ERROR << "Unknown connection error. (%s)" << mosqpp::strerror(rc);
+        break;
+    }
+    if (rc != 0) {
+        sleep(10);
+    }
+}
+
+static
+void mosq_thread_loop(mosquittoPP * mosq) {
+    log4cpp::Category & rlog = log4cpp::Category::getRoot();
+
+    while (!do_exit) {
+        int res = mosq->loop(1000, 1);
+        switch (res) {
+        case MOSQ_ERR_SUCCESS:
+            break;
+        case MOSQ_ERR_NO_CONN: {
+            int res = mosq->connect(mqtt_host, mqtt_port, mqtt_keepalive);
+            if (res) {
+                rlog << log4cpp::Priority::ERROR << "Can't connect to Mosquitto server %s" << mosqpp::strerror(res);
+                sleep(30);
+            }
+            break;
+        }
+        case MOSQ_ERR_INVAL:
+        case MOSQ_ERR_NOMEM:
+        case MOSQ_ERR_CONN_LOST:
+        case MOSQ_ERR_PROTOCOL:
+        case MOSQ_ERR_ERRNO:
+            rlog << log4cpp::Priority::ERROR <<  strerror(errno) << " " << mosqpp::strerror(res);
+            mosq->disconnect();
+            rlog << log4cpp::Priority::ERROR << "disconnected";
+            sleep(10);
+            rlog << log4cpp::Priority::ERROR << "Try to reconnect";
+            int res = mosq->connect(mqtt_host, mqtt_port, mqtt_keepalive);
+            if (res) {
+                rlog << log4cpp::Priority::ERROR << "Can't connect to Mosquitto server " << mosqpp::strerror(res);
+            } else {
+                rlog << log4cpp::Priority::ERROR << "Connected";
+            }
+            break;
+        }
+    }
+}
+
+static void testOcr(ImageInput * pImageInput) {
     log4cpp::Category::getRoot().info("testOcr");
 
     Config config;
@@ -49,7 +172,7 @@ static void testOcr(ImageInput* pImageInput) {
     proc.debugWindow();
     proc.debugDigits();
 
-    Plausi plausi(50,3);
+    Plausi plausi(50, 3);
 
     KNearestOcr ocr(config);
     if (! ocr.loadTrainingData()) {
@@ -67,7 +190,7 @@ static void testOcr(ImageInput* pImageInput) {
         std::string result = ocr.recognize(proc.getOutput());
         time_t time = pImageInput->getTime();
         char * str_time = std::ctime(&time);
-        str_time[strlen(str_time)-1]=0;
+        str_time[strlen(str_time) - 1] = 0;
         std::cout << str_time << "  ";
         std::cout << std::left << std::setw(8) << result;
         if (result.find("?") != std::string::npos) {
@@ -100,7 +223,42 @@ static void testOcr(ImageInput* pImageInput) {
     }
 }
 
-static void learnOcr(ImageInput* pImageInput) {
+static void mqttOcr(ImageInput * pImageInput, mosquittoPP * mosq) {
+    log4cpp::Category::getRoot().info("mqttOcr");
+
+    Config config;
+    config.loadConfig();
+    ImageProcessor proc(config);
+
+    Plausi plausi(50, 3);
+
+    KNearestOcr ocr(config);
+    if (! ocr.loadTrainingData()) {
+        std::cout << "Failed to load OCR training data\n";
+        return;
+    }
+    std::cout << "OCR training data loaded.\n";
+    std::string path;
+
+    while (pImageInput->nextImage(path) && !do_exit) {
+        proc.setInput(pImageInput->getImage());
+        proc.process();
+
+        std::string result = ocr.recognize(proc.getOutput());
+
+        if (result.find("?") != std::string::npos) {
+            pImageInput->saveImage();
+        }
+
+        if (plausi.check(result, pImageInput->getTime())) {
+            double value = plausi.getCheckedValue();
+            std::cout << "  " << std::fixed << std::setprecision(3) << value << std::endl;
+            mosq->publish_state(value);
+        }
+    }
+}
+
+static void learnOcr(ImageInput * pImageInput) {
     log4cpp::Category::getRoot().info("learnOcr");
 
     Config config;
@@ -134,7 +292,7 @@ static void learnOcr(ImageInput* pImageInput) {
     }
 }
 
-static void adjustCamera(ImageInput* pImageInput) {
+static void adjustCamera(ImageInput * pImageInput) {
     log4cpp::Category::getRoot().info("adjustCamera");
 
     Config config;
@@ -176,18 +334,18 @@ static void adjustCamera(ImageInput* pImageInput) {
     }
 }
 
-static void capture(ImageInput* pImageInput) {
+static void capture(ImageInput * pImageInput) {
     log4cpp::Category::getRoot().info("capture");
 
     std::cout << "Capturing images into directory.\n";
     std::cout << "<Ctrl-C> to quit.\n";
     std::string path;
     while (pImageInput->nextImage(path)) {
-        usleep(delay*1000L);
+        usleep(delay * 1000L);
     }
 }
 
-static void writeData(ImageInput* pImageInput) {
+static void writeData(ImageInput * pImageInput) {
     log4cpp::Category::getRoot().info("writeData");
 
     Config config;
@@ -224,11 +382,11 @@ static void writeData(ImageInput* pImageInput) {
             pImageInput->saveImage();
             pImageInput->setOutputDir("");
         }
-        usleep(delay*1000L);
+        usleep(delay * 1000L);
     }
 }
 
-static void usage(const char* progname) {
+static void usage(const char * progname) {
     std::cout << "Program to read and recognize the counter of an electricity meter with OpenCV.\n";
     std::cout << "Version: " << VERSION << std::endl;
     std::cout << "Usage: " << progname << " [-i <dir>|-c <cam>] [-l|-t|-a|-w|-o <dir>] [-s <delay>] [-v <level>\n";
@@ -247,118 +405,31 @@ static void usage(const char* progname) {
 }
 
 static void configureLogging(const std::string & priority = "INFO", bool toConsole = false) {
-    log4cpp::Appender *fileAppender = new log4cpp::FileAppender("default", "emeocv.log");
-    log4cpp::PatternLayout* layout = new log4cpp::PatternLayout();
+    log4cpp::Appender * fileAppender = new log4cpp::FileAppender("default", "emeocv.log");
+    log4cpp::PatternLayout * layout = new log4cpp::PatternLayout();
     layout->setConversionPattern("%d{%d.%m.%Y %H:%M:%S} %p: %m%n");
     fileAppender->setLayout(layout);
-    log4cpp::Category& root = log4cpp::Category::getRoot();
+    log4cpp::Category & root = log4cpp::Category::getRoot();
     root.setPriority(log4cpp::Priority::getPriorityValue(priority));
     root.addAppender(fileAppender);
     if (toConsole) {
         std::cout << "CONSOLE\n";
-        log4cpp::Appender *consoleAppender = new log4cpp::OstreamAppender("console", &std::cout);
+        log4cpp::Appender * consoleAppender = new log4cpp::OstreamAppender("console", &std::cout);
         consoleAppender->setLayout(new log4cpp::SimpleLayout());
         root.addAppender(consoleAppender);
     }
 }
-#define ONLINE "Online"
-#define OFFLINE "Offline"
 
-const char * mqtt_host = "192.168.0.106";
-const int mqtt_port = 8883;
-const int mqtt_keepalive = 60;
-
-class mosquittoPP : public mosqpp::mosquittopp {
-public:
-    using  mosqpp::mosquittopp::mosquittopp;
-    void publish_lwt(bool online);
-    void publish_state(void);
-    void on_connect(int rc);
-};
-
-void mosquittoPP::publish_lwt(bool online) {
-    const char * msg = online ? ONLINE : OFFLINE;
-    publish(NULL,"tele/gas/LWT",strlen(msg),msg, 0, true);
-}
-
-void mosquittoPP::publish_state(void) {
-}
-
-void mosquittoPP::on_connect(int rc) {
-    log4cpp::Category& rlog = log4cpp::Category::getRoot();
-    std::cout << "AAAA " << rc << std::endl;
-    switch (rc) {
-    case 0:
-        subscribe(NULL, "stat/+/POWER", 0);
-        publish_lwt(true);
-        publish_state();
-        break;
-    case 1:
-        rlog << log4cpp::Priority::ERROR << "Connection refused (unacceptable protocol version).";
-        break;
-    case 2:
-        rlog << log4cpp::Priority::ERROR << "Connection refused (identifier rejected).";
-        break;
-    case 3:
-        rlog << log4cpp::Priority::ERROR << "Connection refused (broker unavailable).";
-        break;
-    default:
-        rlog << log4cpp::Priority::ERROR << "Unknown connection error. (%s)" << mosqpp::strerror(rc);
-        break;
-    }
-    if (rc != 0) {
-        sleep(10);
-    }
-}
-
-static
-void mosq_thread_loop(mosquittoPP * mosq) {
-    log4cpp::Category& rlog = log4cpp::Category::getRoot();
-
-    while (!do_exit) {
-        int res = mosq->loop(1000, 1);
-        switch (res) {
-        case MOSQ_ERR_SUCCESS:
-            break;
-        case MOSQ_ERR_NO_CONN: {
-            int res = mosq->connect(mqtt_host, mqtt_port, mqtt_keepalive);
-            if (res) {
-                rlog << log4cpp::Priority::ERROR << "Can't connect to Mosquitto server %s" << mosqpp::strerror(res);
-                sleep(30);
-            }
-            break;
-        }
-        case MOSQ_ERR_INVAL:
-        case MOSQ_ERR_NOMEM:
-        case MOSQ_ERR_CONN_LOST:
-        case MOSQ_ERR_PROTOCOL:
-        case MOSQ_ERR_ERRNO:
-            rlog << log4cpp::Priority::ERROR <<  strerror(errno) << " " << mosqpp::strerror(res);
-            mosq->disconnect();
-            rlog << log4cpp::Priority::ERROR << "disconnected";
-            sleep(10);
-            rlog << log4cpp::Priority::ERROR << "Try to reconnect";
-            int res = mosq->connect(mqtt_host, mqtt_port, mqtt_keepalive);
-            if (res) {
-                rlog << log4cpp::Priority::ERROR << "Can't connect to Mosquitto server " << mosqpp::strerror(res);
-            } else {
-                rlog << log4cpp::Priority::ERROR <<"Connected";
-            }
-            break;
-        }
-    }
-}
-
-int main(int argc, char **argv) {
+int main(int argc, char ** argv) {
     int opt;
-    ImageInput* pImageInput = 0;
+    ImageInput * pImageInput = 0;
     int inputCount = 0;
     std::string outputDir;
     std::string logLevel = "ERROR";
     char cmd = 0;
     int cmdCount = 0;
 
-    while ((opt = getopt(argc, argv, "i:c:ltaws:o:v:hd:")) != -1) {
+    while ((opt = getopt(argc, argv, "i:c:ltaws:o:v:hd:m")) != -1) {
         switch (opt) {
         case 'd':
             pImageInput = new InotifyInput(optarg, 100000);
@@ -376,6 +447,7 @@ int main(int argc, char **argv) {
         case 't':
         case 'a':
         case 'w':
+        case 'm':
             cmd = opt;
             cmdCount++;
             break;
@@ -410,11 +482,11 @@ int main(int argc, char **argv) {
 
     configureLogging(logLevel, true);
     mosqpp::lib_init();
-    mosquittoPP * mosq = new mosquittoPP("test", true);
+    mosquittoPP * mosq = new mosquittoPP("gas_reco", true, "gas_reco");
 
 
     mosq->username_pw_set("owntracks", "zhopa");
-    mosq->will_set("tele/gas/LWT",strlen(OFFLINE),OFFLINE, 0, true);
+    mosq->will_set(mosq->make_topic(TOPIC_LWT).c_str(), strlen(OFFLINE), OFFLINE, 0, true);
     mosq->connect(mqtt_host, mqtt_port, mqtt_keepalive);
 
 
@@ -428,6 +500,9 @@ int main(int argc, char **argv) {
         break;
     case 'l':
         learnOcr(pImageInput);
+        break;
+    case 'm':
+        mqttOcr(pImageInput, mosq);
         break;
     case 't':
         testOcr(pImageInput);
