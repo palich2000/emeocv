@@ -74,6 +74,7 @@ void ImageProcessor::showImage() {
  */
 void ImageProcessor::process() {
     _digits.clear();
+    _rois.clear();
 
     // convert to gray
 #if CV_MAJOR_VERSION == 2
@@ -115,7 +116,7 @@ void ImageProcessor::rotate(double rotationDegrees) {
  * Draw lines into image.
  * For debugging purposes.
  */
-void ImageProcessor::drawLines(std::vector<cv::Vec2f>& lines) {
+void ImageProcessor::drawLines(std::vector<cv::Vec2f> & lines) {
     // draw lines
     for (size_t i = 0; i < lines.size(); i++) {
         float rho = lines[i][0];
@@ -132,7 +133,7 @@ void ImageProcessor::drawLines(std::vector<cv::Vec2f>& lines) {
  * Draw lines into image.
  * For debugging purposes.
  */
-void ImageProcessor::drawLines(std::vector<cv::Vec4i>& lines, int xoff, int yoff) {
+void ImageProcessor::drawLines(std::vector<cv::Vec4i> & lines, int xoff, int yoff) {
     for (size_t i = 0; i < lines.size(); i++) {
         cv::line(_img, cv::Point(lines[i][0] + xoff, lines[i][1] + yoff),
                  cv::Point(lines[i][2] + xoff, lines[i][3] + yoff), cv::Scalar(255, 0, 0), 1);
@@ -143,7 +144,7 @@ void ImageProcessor::drawLines(std::vector<cv::Vec4i>& lines, int xoff, int yoff
  * Detect the skew of the image by finding almost (+- 30 deg) horizontal lines.
  */
 float ImageProcessor::detectSkew() {
-    log4cpp::Category& rlog = log4cpp::Category::getRoot();
+    log4cpp::Category & rlog = log4cpp::Category::getRoot();
 
     cv::Mat edges = cannyEdges();
 
@@ -194,7 +195,7 @@ cv::Mat ImageProcessor::cannyEdges() {
  * Find bounding boxes that are aligned at y position.
  */
 void ImageProcessor::findAlignedBoxes(std::vector<cv::Rect>::const_iterator begin,
-                                      std::vector<cv::Rect>::const_iterator end, std::vector<cv::Rect>& result) {
+                                      std::vector<cv::Rect>::const_iterator end, std::vector<cv::Rect> & result) {
     std::vector<cv::Rect>::const_iterator it = begin;
     cv::Rect start = *it;
     ++it;
@@ -207,7 +208,7 @@ void ImageProcessor::findAlignedBoxes(std::vector<cv::Rect>::const_iterator begi
     }
 }
 
-int FindBound(std::vector<cv::Rect>& boundingBoxes, cv::Rect bound) {
+int FindBound(std::vector<cv::Rect> & boundingBoxes, cv::Rect bound) {
     for (size_t i = 0; i < boundingBoxes.size(); i++) {
         cv::Rect rect1 = boundingBoxes[i];
         if ((rect1 & bound).area() > 0) {
@@ -223,9 +224,9 @@ int FindBound(std::vector<cv::Rect>& boundingBoxes, cv::Rect bound) {
 /**
  * Filter contours by size of bounding rectangle.
  */
-void ImageProcessor::filterContours(std::vector<std::vector<cv::Point> >& contours,
-                                    std::vector<cv::Rect>& boundingBoxes,
-                                    std::vector<std::vector<cv::Point> >& filteredContours) {
+void ImageProcessor::filterContours(std::vector<std::vector<cv::Point> > & contours,
+                                    std::vector<cv::Rect> & boundingBoxes,
+                                    std::vector<std::vector<cv::Point> > & filteredContours) {
 
     // filter contours by bounding rect size
 
@@ -243,8 +244,8 @@ void ImageProcessor::filterContours(std::vector<std::vector<cv::Point> >& contou
                 filteredContours.push_back(contours[i]);
                 break;
             default:
-                boundingBoxes.erase(boundingBoxes.begin()+position);
-                filteredContours.erase(filteredContours.begin()+position);
+                boundingBoxes.erase(boundingBoxes.begin() + position);
+                filteredContours.erase(filteredContours.begin() + position);
                 boundingBoxes.push_back(bounds);
                 filteredContours.push_back(contours[i]);
                 break;
@@ -257,7 +258,7 @@ void ImageProcessor::filterContours(std::vector<std::vector<cv::Point> >& contou
  * Find and isolate the digits of the counter,
  */
 void ImageProcessor::findCounterDigits() {
-    log4cpp::Category& rlog = log4cpp::Category::getRoot();
+    log4cpp::Category & rlog = log4cpp::Category::getRoot();
 
     // edge image
     cv::Mat edges = cannyEdges();
@@ -312,13 +313,25 @@ void ImageProcessor::findCounterDigits() {
     for (size_t i = 0; i < alignedBoundingBoxes.size(); ++i) {
         cv::Rect roi = alignedBoundingBoxes[i];
         _digits.push_back(img_ret(roi));
+        _rois.push_back(roi);
         if (_debugDigits) {
-            cv::putText(_img, std::to_string(i), cv::Point(roi.x+roi.width/2, roi.y+roi.height/2), CV_FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, i * 30));
+            cv::putText(_img, std::to_string(i), cv::Point(roi.x + roi.width / 2, roi.y + roi.height / 2), CV_FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, i * 30));
             cv::rectangle(_img, roi, cv::Scalar(0, 255, i * 30), 2);
         }
     }
 
-    if (alignedBoundingBoxes.size() > 8) {
-        cv::waitKey(0);
+}
+
+void ImageProcessor::markBadDigits(const std::string & digits) {
+    std::cout << _rois.size() << std::endl;
+    for(std::string::size_type i = 0; i < digits.size(); ++i) {
+        if (digits[i] == '?') {
+            cv::Rect roi = _rois[i];
+            auto c = cv::Scalar(255, 255, 255);
+            cv::rectangle(_img, roi, c, 2);
+            cv::line(_img, cv::Point(roi.x, roi.y), cv::Point(roi.x + roi.width, roi.y + roi.height), c, 2);
+            cv::line(_img, cv::Point(roi.x + roi.width, roi.y), cv::Point(roi.x, roi.y + roi.height), c, 2);
+        }
     }
+    showImage();
 }

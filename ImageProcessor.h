@@ -29,22 +29,23 @@ public:
     void showImage();
     void saveConfig();
     void loadConfig();
-
+    void markBadDigits(const std::string & digits);
 private:
     void rotate(double rotationDegrees);
     void findCounterDigits();
     void findAlignedBoxes(std::vector<cv::Rect>::const_iterator begin,
-            std::vector<cv::Rect>::const_iterator end, std::vector<cv::Rect>& result);
+                          std::vector<cv::Rect>::const_iterator end, std::vector<cv::Rect> & result);
     float detectSkew();
-    void drawLines(std::vector<cv::Vec2f>& lines);
-    void drawLines(std::vector<cv::Vec4i>& lines, int xoff=0, int yoff=0);
+    void drawLines(std::vector<cv::Vec2f> & lines);
+    void drawLines(std::vector<cv::Vec4i> & lines, int xoff = 0, int yoff = 0);
     cv::Mat cannyEdges();
-    void filterContours(std::vector<std::vector<cv::Point> >& contours, std::vector<cv::Rect>& boundingBoxes,
-            std::vector<std::vector<cv::Point> >& filteredContours);
+    void filterContours(std::vector<std::vector<cv::Point> > & contours, std::vector<cv::Rect> & boundingBoxes,
+                        std::vector<std::vector<cv::Point> > & filteredContours);
 
     cv::Mat _img;
     cv::Mat _imgGray;
     std::vector<cv::Mat> _digits;
+    std::vector<cv::Rect> _rois;
     Config _config;
     bool _debugWindow;
     bool _debugSkew;

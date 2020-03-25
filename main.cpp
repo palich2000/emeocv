@@ -59,6 +59,7 @@ const int mqtt_port = 8883;
 const int mqtt_keepalive = 60;
 #define TOPIC_LWT "tele/%s/LWT"
 #define TOPIC_SENSOR "tele/%s/SENSOR"
+
 class mosquittoPP : public mosqpp::mosquittopp {
 public:
     //using  mosqpp::mosquittopp::mosquittopp;
@@ -105,7 +106,6 @@ void mosquittoPP::on_connect(int rc) {
         rlog << log4cpp::Priority::INFO << "Connected to mqtt server.";
         subscribe(NULL, "stat/+/POWER", 0);
         publish_lwt(true);
-        //publish_state();
         break;
     case 1:
         rlog << log4cpp::Priority::ERROR << "Connection refused (unacceptable protocol version).";
@@ -241,18 +241,24 @@ static void mqttOcr(ImageInput * pImageInput, mosquittoPP * mosq) {
     std::string path;
 
     while (pImageInput->nextImage(path) && !do_exit) {
+        std::cout << "--------------=================------------" << std::endl;
         proc.setInput(pImageInput->getImage());
         proc.process();
 
         std::string result = ocr.recognize(proc.getOutput());
 
         if (result.find("?") != std::string::npos) {
+            std::cout << "Unrecognized  " << result << std::endl;
             pImageInput->saveImage();
         }
-
-        if (plausi.check(result, pImageInput->getTime())) {
-            double value = plausi.getCheckedValue();
-            std::cout << "  " << std::fixed << std::setprecision(3) << value << std::endl;
+        bool checked = plausi.check(result, pImageInput->getTime());
+        double value = plausi.getCheckedValue();
+        if (checked) {
+            std::cout << "New  " << std::fixed << std::setprecision(3) << value << std::endl;
+        } else {
+            std::cout << "Old  " << std::fixed << std::setprecision(3) << value << std::endl;
+        }
+        if (value > 0) {
             mosq->publish_state(value);
         }
     }
@@ -265,6 +271,7 @@ static void learnOcr(ImageInput * pImageInput) {
     config.loadConfig();
     ImageProcessor proc(config);
     proc.debugWindow();
+    proc.debugDigits();
 
     KNearestOcr ocr(config);
     ocr.loadTrainingData();
@@ -277,12 +284,17 @@ static void learnOcr(ImageInput * pImageInput) {
         proc.setInput(pImageInput->getImage());
         proc.process();
 
-        key = ocr.learn(proc.getOutput());
-        std::cout << std::endl;
-
-        if (key == 'q' || key == 's') {
-            std::cout << "Quit\n";
-            break;
+        std::string result = ocr.recognize(proc.getOutput());
+        if (result.find("?") != std::string::npos) {
+            proc.markBadDigits(result);
+            std::cout << "Learn:" << result << "  " << std::endl;
+            for(std::string::size_type i = 0; i < result.size(); ++i) {
+                if (result[i] == '?') {
+                    key = ocr.learn(proc.getOutput()[i]);
+                    if (key == 'q') break;
+                }
+            }
+            if (key == 'q') break;
         }
     }
 
@@ -426,10 +438,11 @@ int main(int argc, char ** argv) {
     int inputCount = 0;
     std::string outputDir;
     std::string logLevel = "ERROR";
+    std::string hostname = "gas_reco";
     char cmd = 0;
     int cmdCount = 0;
 
-    while ((opt = getopt(argc, argv, "i:c:ltaws:o:v:hd:m")) != -1) {
+    while ((opt = getopt(argc, argv, "i:c:ltaws:ov:hd:mx:H:")) != -1) {
         switch (opt) {
         case 'd':
             pImageInput = new InotifyInput(optarg, 100000);
@@ -448,19 +461,21 @@ int main(int argc, char ** argv) {
         case 'a':
         case 'w':
         case 'm':
-            cmd = opt;
-            cmdCount++;
-            break;
         case 'o':
             cmd = opt;
             cmdCount++;
-            outputDir = optarg;
             break;
         case 's':
             delay = atoi(optarg);
             break;
         case 'v':
             logLevel = optarg;
+            break;
+        case 'x':
+            outputDir = optarg;
+            break;
+        case 'H':
+            hostname = optarg;
             break;
         case 'h':
         default:
@@ -482,8 +497,7 @@ int main(int argc, char ** argv) {
 
     configureLogging(logLevel, true);
     mosqpp::lib_init();
-    mosquittoPP * mosq = new mosquittoPP("gas_reco", true, "gas_reco");
-
+    mosquittoPP * mosq = new mosquittoPP("gas_reco", true, hostname.c_str());
 
     mosq->username_pw_set("owntracks", "zhopa");
     mosq->will_set(mosq->make_topic(TOPIC_LWT).c_str(), strlen(OFFLINE), OFFLINE, 0, true);
@@ -502,6 +516,7 @@ int main(int argc, char ** argv) {
         learnOcr(pImageInput);
         break;
     case 'm':
+        pImageInput->setOutputDir(outputDir);
         mqttOcr(pImageInput, mosq);
         break;
     case 't':
