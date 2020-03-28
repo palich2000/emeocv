@@ -417,7 +417,7 @@ static void usage(const char * progname) {
 }
 
 static void configureLogging(const std::string & priority = "INFO", bool toConsole = false) {
-    log4cpp::Appender * fileAppender = new log4cpp::FileAppender("default", "emeocv.log");
+    log4cpp::Appender * fileAppender = new log4cpp::FileAppender("default", "/var/log/emeocv.log");
     log4cpp::PatternLayout * layout = new log4cpp::PatternLayout();
     layout->setConversionPattern("%d{%d.%m.%Y %H:%M:%S} %p: %m%n");
     fileAppender->setLayout(layout);
@@ -435,10 +435,12 @@ static void configureLogging(const std::string & priority = "INFO", bool toConso
 int main(int argc, char ** argv) {
     int opt;
     ImageInput * pImageInput = 0;
+    mosquittoPP * mosq = 0;
     int inputCount = 0;
     std::string outputDir;
     std::string logLevel = "ERROR";
     std::string hostname = "gas_reco";
+    std::thread * mosq_th = 0;
     char cmd = 0;
     int cmdCount = 0;
 
@@ -496,16 +498,14 @@ int main(int argc, char ** argv) {
     }
 
     configureLogging(logLevel, true);
-    mosqpp::lib_init();
-    mosquittoPP * mosq = new mosquittoPP("gas_reco", true, hostname.c_str());
-
-    mosq->username_pw_set("owntracks", "zhopa");
-    mosq->will_set(mosq->make_topic(TOPIC_LWT).c_str(), strlen(OFFLINE), OFFLINE, 0, true);
-    mosq->connect(mqtt_host, mqtt_port, mqtt_keepalive);
-
-
-    std::thread mosq_th(mosq_thread_loop, mosq);
-
+    if (cmd == 'm') {
+        mosqpp::lib_init();
+        mosq = new mosquittoPP("gas_reco", true, hostname.c_str());
+        mosq->username_pw_set("owntracks", "zhopa");
+        mosq->will_set(mosq->make_topic(TOPIC_LWT).c_str(), strlen(OFFLINE), OFFLINE, 0, true);
+        mosq->connect(mqtt_host, mqtt_port, mqtt_keepalive);
+        mosq_th = new std::thread(mosq_thread_loop, mosq);
+    }
 
     switch (cmd) {
     case 'o':
@@ -532,10 +532,13 @@ int main(int argc, char ** argv) {
 
     do_exit = true;
     delete pImageInput;
-    mosq->publish_lwt(false);
-    mosq->disconnect();
-    mosq_th.join();
-    delete mosq;
-    mosqpp::lib_cleanup();
+    if (cmd == 'm') {
+        mosq->publish_lwt(false);
+        mosq->disconnect();
+        mosq_th->join();
+        delete mosq;
+        delete mosq_th;
+        mosqpp::lib_cleanup();
+    }
     exit(EXIT_SUCCESS);
 }
