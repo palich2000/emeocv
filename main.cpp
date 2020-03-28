@@ -252,9 +252,9 @@ static void mqttOcr(ImageInput * pImageInput, mosquittoPP * mosq) {
         bool checked = plausi.check(result, pImageInput->getTime());
         double value = plausi.getCheckedValue();
         if (checked) {
-            std::cout << "New  " << std::fixed << std::setprecision(3) << value << std::endl;
+            std::cout << "New  " << std::left << std::setw(8) << result << " " << std::fixed << std::setprecision(3) << value << std::endl;
         } else {
-            std::cout << "Old  " << std::fixed << std::setprecision(3) << value << std::endl;
+            std::cout << "Old  " << std::left << std::setw(8) << result << " " << std::fixed << std::setprecision(3) << value << std::endl;
         }
         if (value > 0) {
             mosq->publish_state(value);
