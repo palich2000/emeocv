@@ -1,7 +1,7 @@
 .PHONY: clean, mrproper
 
 PROJECT = emeocv
-
+DESTDIR = "/usr/local/bin"
 OBJS = $(addprefix $(OUTDIR)/,\
   Directory.o \
   Config.o \
@@ -51,3 +51,7 @@ clean:
 
 mrproper: clean
 	rm -rf $(BIN)
+
+install: $(BIN)
+	install -d -o root -g root $(DESTDIR)/
+	install -o root -g root $(BIN) $(DESTDIR)/
