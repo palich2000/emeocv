@@ -51,6 +51,8 @@ std::string string_format( const std::string & format, Args ... args ) {
     return std::string( buf.get(), buf.get() + size - 1 );
 }
 
+Config config;
+
 #define ONLINE "Online"
 #define OFFLINE "Offline"
 
@@ -166,8 +168,6 @@ void mosq_thread_loop(mosquittoPP * mosq) {
 static void testOcr(ImageInput * pImageInput) {
     log4cpp::Category::getRoot().info("testOcr");
 
-    Config config;
-    config.loadConfig();
     ImageProcessor proc(config);
     proc.debugWindow();
     proc.debugDigits();
@@ -226,8 +226,6 @@ static void testOcr(ImageInput * pImageInput) {
 static void mqttOcr(ImageInput * pImageInput, mosquittoPP * mosq) {
     log4cpp::Category::getRoot().info("mqttOcr");
 
-    Config config;
-    config.loadConfig();
     ImageProcessor proc(config);
 
     Plausi plausi(50, 3);
@@ -267,8 +265,6 @@ static void mqttOcr(ImageInput * pImageInput, mosquittoPP * mosq) {
 static void learnOcr(ImageInput * pImageInput) {
     log4cpp::Category::getRoot().info("learnOcr");
 
-    Config config;
-    config.loadConfig();
     ImageProcessor proc(config);
     proc.debugWindow();
     proc.debugDigits();
@@ -307,8 +303,6 @@ static void learnOcr(ImageInput * pImageInput) {
 static void adjustCamera(ImageInput * pImageInput) {
     log4cpp::Category::getRoot().info("adjustCamera");
 
-    Config config;
-    config.loadConfig();
     ImageProcessor proc(config);
     proc.debugWindow();
     proc.debugDigits();
@@ -360,8 +354,6 @@ static void capture(ImageInput * pImageInput) {
 static void writeData(ImageInput * pImageInput) {
     log4cpp::Category::getRoot().info("writeData");
 
-    Config config;
-    config.loadConfig();
     ImageProcessor proc(config);
 
     Plausi plausi;
@@ -440,11 +432,12 @@ int main(int argc, char ** argv) {
     std::string outputDir;
     std::string logLevel = "ERROR";
     std::string hostname = "gas_reco";
+    std::string configpath = "config.yml";
     std::thread * mosq_th = 0;
     char cmd = 0;
     int cmdCount = 0;
 
-    while ((opt = getopt(argc, argv, "i:c:ltaws:ov:hd:mx:H:")) != -1) {
+    while ((opt = getopt(argc, argv, "i:c:ltaws:ov:hd:mx:H:C:")) != -1) {
         switch (opt) {
         case 'd':
             pImageInput = new InotifyInput(optarg, 100000);
@@ -479,6 +472,9 @@ int main(int argc, char ** argv) {
         case 'H':
             hostname = optarg;
             break;
+        case 'C':
+            configpath = optarg;
+            break;
         case 'h':
         default:
             usage(argv[0]);
@@ -486,6 +482,9 @@ int main(int argc, char ** argv) {
             break;
         }
     }
+
+    config.loadConfig(configpath);
+
     if (inputCount != 1) {
         std::cerr << "*** You should specify exactly one camera or input directory!\n\n";
         usage(argv[0]);

@@ -12,7 +12,9 @@ class Config {
 public:
     Config();
     void saveConfig();
+    void saveConfig(const std::string & configPath);
     void loadConfig();
+    void loadConfig(const std::string & configPath);
 
     int getDigitMaxHeight() const {
         return _digitMaxHeight;
@@ -55,6 +57,7 @@ private:
     int _cannyThreshold1;
     int _cannyThreshold2;
     std::string _trainingDataFilename;
+    std::string _configPath = "config.yml";
 };
 
 #endif /* CONFIG_H_ */
