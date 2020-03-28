@@ -179,7 +179,7 @@ static void testOcr(ImageInput * pImageInput) {
         std::cout << "Failed to load OCR training data\n";
         return;
     }
-    std::cout << "OCR training data loaded.\n";
+    std::cout << "OCR training data loaded from " << config.getTrainingDataFilename() << ".\n";
     std::cout << "<q> to quit.\n";
     std::string path;
     int key = 0;
@@ -218,7 +218,7 @@ static void testOcr(ImageInput * pImageInput) {
         }
     }
     if (key != 'q' && ocr.hasTrainingData()) {
-        std::cout << "Saving training data\n";
+        std::cout << "Saving training data to " << config.getTrainingDataFilename() << ".\n";
         ocr.saveTrainingData();
     }
 }
@@ -232,10 +232,10 @@ static void mqttOcr(ImageInput * pImageInput, mosquittoPP * mosq) {
 
     KNearestOcr ocr(config);
     if (! ocr.loadTrainingData()) {
-        std::cout << "Failed to load OCR training data\n";
+        std::cout << "Failed to load OCR training data from " << config.getTrainingDataFilename() << ".\n";
         return;
     }
-    std::cout << "OCR training data loaded.\n";
+    std::cout << "OCR training data loaded from " << config.getTrainingDataFilename() << ".\n";
     std::string path;
 
     while (pImageInput->nextImage(path) && !do_exit) {
@@ -295,7 +295,7 @@ static void learnOcr(ImageInput * pImageInput) {
     }
 
     if (key != 'q' && ocr.hasTrainingData()) {
-        std::cout << "Saving training data\n";
+        std::cout << "Saving training data to " << config.getTrainingDataFilename() << ".\n";
         ocr.saveTrainingData();
     }
 }
@@ -367,7 +367,8 @@ static void writeData(ImageInput * pImageInput) {
         std::cout << "Failed to load OCR training data\n";
         return;
     }
-    std::cout << "OCR training data loaded.\n";
+    std::cout << "OCR training data loaded from " << config.getTrainingDataFilename() << ".\n";
+
     std::cout << "<Ctrl-C> to quit.\n";
     std::string path;
     while (pImageInput->nextImage(path)) {

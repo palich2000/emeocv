@@ -4,7 +4,7 @@
  */
 
 #include <opencv2/highgui/highgui.hpp>
-
+#include <iostream>
 #include "Config.h"
 
 Config::Config() :
@@ -24,6 +24,7 @@ void Config::saveConfig(const std::string & configPath) {
 }
 
 void Config::saveConfig() {
+    std::cout << "Save config to " << _configPath << "\n";
     cv::FileStorage fs(_configPath, cv::FileStorage::WRITE);
     fs << "rotationDegrees" << _rotationDegrees;
     fs << "cannyThreshold1" << _cannyThreshold1;
@@ -42,6 +43,7 @@ void Config::loadConfig(const std::string & configPath) {
 }
 
 void Config::loadConfig() {
+    std::cout << "Load config from " << _configPath << "\n";
     cv::FileStorage fs(_configPath, cv::FileStorage::READ);
     if (fs.isOpened()) {
         fs["rotationDegrees"] >> _rotationDegrees;
