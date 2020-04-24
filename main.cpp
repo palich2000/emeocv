@@ -172,7 +172,7 @@ static void testOcr(ImageInput * pImageInput) {
     proc.debugWindow();
     proc.debugDigits();
 
-    Plausi plausi(50, 3);
+    Plausi plausi(5, 3);
 
     KNearestOcr ocr(config);
     if (! ocr.loadTrainingData()) {
@@ -228,7 +228,7 @@ static void mqttOcr(ImageInput * pImageInput, mosquittoPP * mosq) {
 
     ImageProcessor proc(config);
 
-    Plausi plausi(50, 3);
+    Plausi plausi(5, 3);
 
     KNearestOcr ocr(config);
     if (! ocr.loadTrainingData()) {
@@ -356,7 +356,7 @@ static void writeData(ImageInput * pImageInput) {
 
     ImageProcessor proc(config);
 
-    Plausi plausi;
+    Plausi plausi(5, 3);
 
     RRDatabase rrd("emeter.rrd");
 

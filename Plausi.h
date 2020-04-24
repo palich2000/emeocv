@@ -13,7 +13,7 @@
 
 class Plausi {
 public:
-    Plausi(double maxPower = 50. /*kW*/, size_t window = 13);
+    Plausi(double maxPower = 5. /*m3*/, size_t window = 3);
     bool check(const std::string & value, time_t time);
     double getCheckedValue();
     time_t getCheckedTime();
