@@ -26,6 +26,12 @@ bool Plausi::check(const std::string& value, time_t time) {
     }
     //00835.995
     int vLen = value.length();
+
+    if ((_queue.size() == 0 ) && (vLen != 8 )) {
+        rlog.info("Plausi rejected: first time only 8 digits required '%s'", value.c_str());
+        return false;
+    }
+
     if (vLen < 5 || vLen > 8 ) {
         rlog.info("Plausi rejected: exactly %d digits", vLen );
         return false;
